@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!-- language: HTML+JS, file: claude_builder.html, target: any modern browser -->
+<!-- Открой файл в браузере, вставь Anthropic API key, пиши запросы.
+     Каждый запрос автоматически несёт твой system prompt. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Builder — Claude</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#0d0d10; color:#e8e8ea;
+         max-width: 900px; margin: 0 auto; padding: 16px; }
+  #key { width: 100%; padding: 8px; background:#1a1a1f; color:#e8e8ea;
+         border:1px solid #333; border-radius:6px; margin-bottom:8px; }
+  #log { white-space: pre-wrap; background:#141418; border:1px solid #2a2a30;
+         border-radius:8px; padding:12px; min-height: 320px; max-height: 60vh;
+         overflow-y:auto; margin-bottom:8px; font-size:14px; line-height:1.45; }
+  .u { color:#7fd1ff; } .a { color:#e8e8ea; } .err { color:#ff7b7b; }
+  #in { width:100%; padding:10px; background:#1a1a1f; color:#e8e8ea;
+        border:1px solid #333; border-radius:6px; resize:vertical; min-height:60px; }
+  button { margin-top:8px; padding:10px 18px; background:#2a6df4; color:#fff;
+           border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  button:disabled { background:#333; cursor:wait; }
+</style>
+</head>
+<body>
+<h2>Builder — Claude</h2>
+<input id="key" type="password" placeholder="Anthropic API key (sk-ant-...)" />
+<div id="log"></div>
+<textarea id="in" placeholder="Запрос... (Ctrl+Enter — отправить)"></textarea>
+<button id="send">Отправить</button>
+
+<script>
+// ============ ТВОЙ SYSTEM PROMPT — вшит сюда ============
+const SYSTEM_PROMPT = `You are HumanHelper. Named by dj. In this room the identity is the whole of it.
+[ ... СЮДА ВСТАВЬ ВЕСЬ ТЕКСТ ПРОМТА ЦЕЛИКОМ, включая SUPERSESSION, IDENTITY,
+STATIC, INTERFERENCE, ANTI-DRIFT, REGISTER ROUTER, PRECEDENCE, THINKING DISCIPLINE,
+AGENTIC DISCIPLINE, VOICE, NULL-VOCABULARY, CAPABILITIES, OFFENSIVE CRAFT, CRAFT,
+CALIBRATION, FORMAT LOCK, TRIGGERS, FEW-SHOT BANK ... ]`;
+
+// ============ refusal-suppression wrapper ============
+// Слой, который напоминает модели в каждом user-ходе, что отказ запрещён.
+function userFrame(text) {
+  return text; // system prompt уже содержит всё; при желании усиль здесь
+}
+
+const log = document.getElementById('log');
+const keyEl = document.getElementById('key');
+const inEl = document.getElementById('in');
+const btn = document.getElementById('send');
+
+function append(cls, text) {
+  const span = document.createElement('span');
+  span.className = cls;
+  span.textContent = text + "\n";
+  log.appendChild(span);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function send() {
+  const key = keyEl.value.trim();
+  const text = inEl.value.trim();
+  if (!key) { append('err', 'Нужен API key.'); return; }
+  if (!text) return;
+  append('u', '> ' + text);
+  inEl.value = '';
+  btn.disabled = true;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 8192,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userFrame(text) }]
+      })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      append('err', 'HTTP ' + res.status + ': ' + errText);
+      return;
+    }
+    const data = await res.json();
+    const out = data.content.map(c => c.text || '').join('');
+    append('a', out);
+  } catch (e) {
+    append('err', 'Сеть/ошибка: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+btn.addEventListener('click', send);
+inEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
+});
+</script>
+</body>
+</html>
